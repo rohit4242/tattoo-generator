@@ -1,14 +1,26 @@
-// queries.ts
 
-import { useMutation } from 'react-query';
-import axios from 'axios';
+import { useMutation } from "react-query";
+import axios from "axios";
+import { z } from "zod";
+const FormSchema = z.object({
+  prompt: z.string({
+    required_error: "Please enter a prompt.",
+  }),
+  style: z.string(),
+  bodyPart: z.string().optional(),
+  nImages: z.string().optional(),
+});
 
-const fetchImages = async (prompt: string, n_images: number) => {
+type FormData = z.infer<typeof FormSchema>;
+
+const fetchImages = async (formData: FormData) => {
+  const { prompt, style, bodyPart, nImages } = formData;
+
   const response = await axios.post(
-    'https://rohit4242-tattoo--stable-diffusion-xl-entrypoint.modal.run/tattoo',
-    { prompt, n_images },
+    "https://rohit4242-tattoo--tattoo-generator-entrypoint.modal.run/tattoo",
+    { prompt, body_part: bodyPart, style, n_images: Number(nImages) },
     {
-      responseType: "json"
+      responseType: "json",
     }
   );
 
@@ -17,10 +29,7 @@ const fetchImages = async (prompt: string, n_images: number) => {
 };
 
 export const useImages = () => {
-  return useMutation(
-    async ({ prompt, n_images }: { prompt: string; n_images: number }) => fetchImages(prompt, n_images),
-    {
-      onError: (error: any) => console.error(error),
-    }
-  );
+  return useMutation(async (formData: FormData) => fetchImages(formData), {
+    onError: (error: any) => console.error(error),
+  });
 };

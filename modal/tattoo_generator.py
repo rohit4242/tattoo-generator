@@ -23,7 +23,7 @@ import base64
 from typing import List
 
 from modal import (
-    Stub,
+    App,
     Image,
     build,
     enter,
@@ -60,12 +60,12 @@ sdxl_image = (
     )
 )
 
-stub = Stub("stable-diffusion-xl")  # Note: prior to April 2024, "app" was called "stub"
+stub = App("tattoo-generator")
 
 with sdxl_image.imports():
     import torch
     from diffusers import DiffusionPipeline
-
+    from fastapi import Response
 
 # ## Load model and run inference
 #
@@ -126,11 +126,11 @@ class Model:
             **load_options,
         )
 
-    def _inference(self, prompt, body_part="shoulder", n_steps=50, high_noise_frac=0.8):
+    def _inference(self, prompt: str, style: str, body_part: str ="back", n_steps: int = 50, high_noise_frac: float = 0.8):
         negative_prompt = "disfigured, ugly, deformed"
         detailed_prompt = (
-            f"A photo-realistic image of a {body_part} with a {prompt} tattoo, "
-            "showing the tattoo clearly on the human model's {body_part}. "
+            f"A {style} image of a {body_part} with a {prompt} tattoo, "
+            f"showing the tattoo clearly on the human model's {body_part}. "
             "The human model should be visible, and the tattoo should be intricate, "
             "highly detailed, and visually appealing."
         )
@@ -157,17 +157,18 @@ class Model:
         return byte_stream
 
     @method()
-    def inference(self, prompt, body_part="shoulder", n_steps=24, high_noise_frac=0.8):
+    def inference(self, prompt: str, style: str, body_part: str = "back", n_steps: int = 24, high_noise_frac: float = 0.8):
         return self._inference(
             prompt,
             body_part=body_part,
             n_steps=n_steps,
+            style=style,
             high_noise_frac=high_noise_frac,
         ).getvalue()
 
     @web_endpoint()
-    async def web_inference(self, prompt: str, body_part: str = "back", n_steps: int = 24, high_noise_frac: float = 0.8):
-        image_bytes = self._inference(prompt, body_part=body_part, n_steps=n_steps, high_noise_frac=high_noise_frac).getvalue()
+    async def web_inference(self, prompt: str, style: str, body_part: str = "back", n_steps: int = 24, high_noise_frac: float = 0.8):
+        image_bytes = self._inference(prompt,style=style, body_part=body_part, n_steps=n_steps, high_noise_frac=high_noise_frac).getvalue()
         image_bytes_list = base64.b64encode(image_bytes).decode('utf-8')
         return image_bytes_list
 
@@ -179,15 +180,20 @@ async def tattoo(request: Request):
     prompt = body.get("prompt")
     body_part = body.get("body_part", "back")
     n_images = body.get("n_images", 2)
+    style = body.get("style")
 
-    print("prompt is: ", prompt)
+    print("Prompt is: ", prompt)
+    print("Body Part is: ", body_part)
+    print("Numbers of Images: ", n_images)
+    print("Tattoo style: ", style)
+
     if not prompt:
         return JSONResponse({"error": "Please provide a prompt"}, status_code=400)
     
     images_base64: List[str] = []
 
     for _ in range(n_images):
-        image_bytes = Model().inference.remote(prompt=prompt, body_part=body_part)
+        image_bytes = Model().inference.remote(prompt=prompt,style=style, body_part=body_part)
         image_base64 = base64.b64encode(image_bytes).decode('utf-8')
         images_base64.append(image_base64)
     return JSONResponse({"images": images_base64})
@@ -200,14 +206,14 @@ def entrypoint():
 
 @stub.local_entrypoint()
 def main(
-    prompt: str = "Traditional tattoo of a skull with roses", body_part: str = "forearm"
+    prompt: str = "Traditional tattoo of a skull with roses", body_part: str = "chest"
 ):
     # Create the "images" directory if it doesn't exist
     images_dir = Path(os.getcwd()) / "images"
     images_dir.mkdir(exist_ok=True)
 
-    for i in range(4):  # Increase to 4 images for more options
-        image_bytes = Model().inference.remote(prompt=prompt, body_part=body_part)
+    for i in range(2):  # Increase to 4 images for more options
+        image_bytes = Model().inference.remote(prompt=prompt,style="any", body_part=body_part)
         print(image_bytes)
         output_path = images_dir / f"output_{i+1}.png"
         print(f"Saving it to {output_path}")
