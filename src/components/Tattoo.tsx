@@ -32,7 +32,7 @@ const tattooStyles = [
   "Watercolor",
   "Geometric",
   "Tribal",
-  "Realism",
+  "Realistic",
   "New School",
   // Add more styles as needed
 ];
